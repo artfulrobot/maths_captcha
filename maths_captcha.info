@@ -3,5 +3,5 @@ package = "Artful Robot"
 description = "Protects human-input forms by adding a maths quiz"
 core = 7.x
 files[] = maths_captcha.module
-config = admin/config/content/maths_captcha
+configure = admin/config/content/maths_captcha
 
