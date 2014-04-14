@@ -1,5 +1,6 @@
 <?php
-/** @file
+/**
+ * @file
  * Maths Captcha module
  *
  * Protects specified forms from spam entry by requiring user to submit answer
@@ -26,228 +27,232 @@
  */
 
 /**
- * Config form menu item
+ * Config form menu item.
  *
  * Implements hook_menu().
  */
 function maths_captcha_menu() {
-    $items['admin/config/content/maths_captcha'] = array(
-            'title' => 'Maths Capcha configuration',
-            'page callback' => 'drupal_get_form',
-            'page arguments' => array('maths_captcha_config'),
-            'access arguments' => array('configure maths captcha'),
-            );
-    return $items;
+  $items['admin/config/content/maths_captcha'] = array(
+    'title' => 'Maths Capcha configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('maths_captcha_config'),
+    'access arguments' => array('configure maths captcha'),
+  );
+  return $items;
 }
 
-/** Config form
+/**
+ * Config form.
  */
 function maths_captcha_config() {
-    $form = array(
-        'maths_captcha_protect' => array(
-            '#title' => 'Form Ids to protect (you can use * for wildcard)',
-            '#description' => 'Enter form ids one per line',
-            '#type' => 'textarea',
-            '#default_value' => variable_get('maths_captcha_protect', ''),
-            ));
-    return system_settings_form($form);
+  $form = array(
+    'maths_captcha_protect' => array(
+      '#title' => 'Form Ids to protect (you can use * for wildcard)',
+      '#description' => 'Enter form ids one per line',
+      '#type' => 'textarea',
+      '#default_value' => variable_get('maths_captcha_protect', ''),
+    ));
+  return system_settings_form($form);
 }
 
 /**
  * Implements hook_permission().
  */
 function maths_captcha_permission() {
-    return array(
-        'administer maths captcha' => array(
-            'title' => t('Administer Maths Captcha'),
-            'description' => t('Specify which forms to protect'),
-            ),
-    );
+  return array(
+    'administer maths captcha' => array(
+      'title' => t('Administer Maths Captcha'),
+      'description' => t('Specify which forms to protect'),
+    ),
+  );
 }
 
 
-/** create a hash for the data, valid for 15 minutes.
- *
- *  Hash format is:
- *
- *  QQQQHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH:NNNN
- *
- *  Where QQQQ is the two 0-10 numbers encoded
- *  NNNN...    is the valid to timestamp
- *  HH...      is the md5 hash which includes salt, the two numbers and the valid to timestamp
+/**
+ * Create a new hash, valid for 15 minutes.
  */
-function maths_captcha_hash_new($rand1=NULL, $rand2=NULL) {
-    $valid_to = strtotime('now + 15 minutes');
-    if ($rand1 === NULL) {
-        $rand1 = (int) rand(0, 9);
-    }
-    if ($rand2 === NULL) {
-        $rand2 = (int) rand(0, 9);
-    }
-    return maths_captcha_hash_create($rand1, $rand2, $valid_to);
+function maths_captcha_hash_new($rand1 = NULL, $rand2 = NULL) {
+  $valid_to = strtotime('now + 15 minutes');
+  if ($rand1 === NULL) {
+    $rand1 = (int) rand(0, 9);
+  }
+  if ($rand2 === NULL) {
+    $rand2 = (int) rand(0, 9);
+  }
+  return maths_captcha_hash_create($rand1, $rand2, $valid_to);
 }
-/** create a hash for the data, valid for 15 minutes.
+/**
+ * Create a hash for the given parameters.
  *
- *  Hash format is:
+ * Hash format is:
  *
- *  QQQQHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH:NNNN
- *
- *  Where QQQQ is the two 0-10 numbers encoded
- *  NNNN...    is the valid to timestamp
- *  HH...      is the md5 hash which includes salt, the two numbers and the valid to timestamp
+ * - four bytes: the two numbers, base64 encoded XOR-ed
+ * - 32 bytes: md5 hash, inc. salt, both numbers and the
+ *     valid to timestamp
+ * - colon
+ * - string representation of valid to timestamp
  */
 function maths_captcha_hash_create($rand1, $rand2, $valid_to) {
-    $hash = md5("This hash will work for $rand1 and $rand2 until $valid_to") . ":$valid_to";
+  $hash = md5("This hash will work for $rand1 and $rand2 until $valid_to") . ":$valid_to";
 
-    // encrypt question - will generate 4 bytes
-    $enc = base64_encode( "$rand1$rand2" ^ substr($hash, 0, 2));
-    // prepend to hash
-    $hash = $enc . $hash;
+  // Encrypt question - will generate 4 bytes.
+  $enc = base64_encode("$rand1$rand2" ^ substr($hash, 0, 2));
+  // Prepend to hash.
+  $hash = $enc . $hash;
 
-    return $hash;
+  return $hash;
 }
-/** parse, validate and check hash and (optionally) answer
+/**
+ * Parse, validate and check hash and (optionally) answer.
  *
  * returns array of unpacked values:
  *
  * - rand1, rand2
  * - validTo: timestamp
  * - valid: boolean. was the hash valid (inc. timeout)
- * - correct: if an answer was given and the hash was valid, this is evaluated to boolean
- * - error: human friendly error. Real humans should only see the timeout and incorrect answer
- *     texts.
+ * - correct: if an answer was given and the hash was valid, this is evaluated
+ *            to boolean
+ * - error: human friendly error. Real humans should only see the timeout and
+ *          incorrect answer texts.
  */
-function maths_captcha_hash_parse($hash, $answer=NULL) {
-    $result = array(
-        'rand1' => NULL,
-        'rand2' => NULL,
-        'validTo' => NULL,
-        'valid' => NULL,
-        'correct' => NULL,
-        'error' => FALSE,
-        );
-    if (! preg_match('/^(....)(.{32}):(\d+)$/', $hash, $matches)) {
-        $result['error'] = 'Invalid data. (code 1)';
-        return $result;
-    }
-    $matches[1] = base64_decode($matches[1]) ^ substr($matches[2], 0, 2);
-    if (!preg_match('/^[0-9][0-9]$/', $matches[1])) {
-        $result['error'] = 'Invalid data. (code 2)';
-        return $result;
-    }
-    $result['rand1'] = $matches[1][0];
-    $result['rand2'] = $matches[1][1];
-    $result['validTo'] = $matches[3];
-    $hash_expected = maths_captcha_hash_create($result['rand1'], $result['rand2'], $result['validTo']);
-    $result['valid'] = $hash == $hash_expected;
-    if ($result['valid']) {
-        // further date check
-        if ($result['validTo']<time()) {
-            $result['valid'] = FALSE;
-            $result['error'] = 'Timeout';
-        }
-    }
-    // final answer check
-    if ($result['valid']) {
-        if ($answer!==NULL) {
-            $result['correct'] = ( $result['rand1'] + $result['rand2'] ) == $answer;
-        }
-        if (!$result['correct']) {
-            $result['error'] = 'Wrong answer to maths test!';
-        }
-    }
+function maths_captcha_hash_parse($hash, $answer = NULL) {
+  $result = array(
+    'rand1' => NULL,
+    'rand2' => NULL,
+    'validTo' => NULL,
+    'valid' => NULL,
+    'correct' => NULL,
+    'error' => FALSE,
+  );
+
+  if (!preg_match('/^(....)(.{32}):(\d+)$/', $hash, $matches)) {
+    $result['error'] = t('Invalid data. (code @code)', array('@code' => 1));
     return $result;
+  }
+  $matches[1] = base64_decode($matches[1]) ^ substr($matches[2], 0, 2);
+  if (!preg_match('/^[0-9][0-9]$/', $matches[1])) {
+    $result['error'] = t('Invalid data. (code @code)', array('@code' => 2));
+    return $result;
+  }
+  $result['rand1'] = $matches[1][0];
+  $result['rand2'] = $matches[1][1];
+  $result['validTo'] = $matches[3];
+  $hash_expected = maths_captcha_hash_create($result['rand1'], $result['rand2'], $result['validTo']);
+  $result['valid'] = $hash == $hash_expected;
+  if ($result['valid']) {
+    // Further date check.
+    if ($result['validTo'] < time()) {
+      $result['valid'] = FALSE;
+      $result['error'] = t('The human-checking maths test timed out, please check and re-submit.');
+    }
+  }
+  // Final answer check.
+  if ($result['valid']) {
+    if ($answer !== NULL) {
+      $result['correct'] = ($result['rand1'] + $result['rand2']) == $answer;
+    }
+    if (!$result['correct']) {
+      $result['error'] = t('Wrong answer to maths test.');
+    }
+  }
+  return $result;
 }
 
-/** renew an existing hash
+/**
+ * Renew an existing hash.
  *
+ * (This is not currently in use)
  */
 function maths_captcha_hash_renew($hash) {
-    $parsed = maths_captcha_hash_parse($hash);
-    return maths_captcha_hash_new($parsed['rand1'], $parsed['rand2']);
+  $parsed = maths_captcha_hash_parse($hash);
+  return maths_captcha_hash_new($parsed['rand1'], $parsed['rand2']);
 }
 
-/** protect form.
+/**
+ * Protect a form.
  *
  * Implements hook_form_alter().
  */
 function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
-    // check if this is one we should care about.
-    if (!maths_captcha_should_protect($form_id)) {
-        return;
-    }
+  // Check if this is one we should care about.
+  if (!maths_captcha_should_protect($form_id)) {
+    return;
+  }
 
-    if (!empty($form_state['input']['maths_q'])) {
-        $hash = $form_state['input']['maths_q'];
-        $parsed = maths_captcha_hash_parse($hash);
-        if (!$parsed['valid']) {
-            $hash = FALSE;
-        }
-    }
-    if (empty($hash)) {
-        $hash = maths_captcha_hash_new();
-        $parsed = maths_captcha_hash_parse($hash);
-    }
-
-    // create form elements
-    $captcha_form = array(
-        'maths_q' => array(
-            '#type' => 'hidden',
-            '#value' => $hash,
-            ),
-        'maths_a' => array(
-            '#type' => 'textfield',
-            '#size' => 3,
-            '#title' => t('Human test (to stop spam): what is @rand1 plus @rand2 ?',
-                        array(
-                            '@rand1' => $parsed['rand1'],
-                            '@rand2' => $parsed['rand2'],
-                            )),
-            '#default_value' => '',
-        ));
-
-    // we need to insert before the submit...
-    $i=0;
-    foreach ($form as $key => $details) {
-        if (is_array($details)
-            && array_key_exists('#type', $details)
-            && $details['#type'] == 'submit') {
-            break;
-        }
-        $i++;
-    }
-    $form = array_merge(
-        array_slice( $form, 0, $i ),
-        $captcha_form,
-        array_slice( $form, $i ));
-
-    $form['#validate'][] = 'maths_captcha_form_validate';
-}
-
-/** validation for protected forms
- */
-function maths_captcha_form_validate($form, &$form_state) {
-    // important that we compare the value passed (input), not the value from
-    // the form, which is new each time.  this means that if somehow the
-    // maths_q field got corrupted, it would fail but the human would get a new
-    // maths test, and then next time their answer is compared against what was
-    // sent.
+  if (!empty($form_state['input']['maths_q'])) {
     $hash = $form_state['input']['maths_q'];
-    $parsed = maths_captcha_hash_parse($hash, $form_state['values']['maths_a']);
-    if (!$parsed['correct']) {
-        form_set_error('maths_a', t($parsed['error']));
+    $parsed = maths_captcha_hash_parse($hash);
+    if (!$parsed['valid']) {
+      $hash = FALSE;
     }
+  }
+  if (empty($hash)) {
+    $hash = maths_captcha_hash_new();
+    $parsed = maths_captcha_hash_parse($hash);
+  }
+
+  // Create form elements.
+  $captcha_form = array(
+    'maths_q' => array(
+      '#type' => 'hidden',
+      '#value' => $hash,
+    ),
+    'maths_a' => array(
+      '#type' => 'textfield',
+      '#size' => 3,
+      '#title' => t('Human test (to stop spam): what is @rand1 plus @rand2 ?',
+            array(
+              '@rand1' => $parsed['rand1'],
+              '@rand2' => $parsed['rand2'],
+            )),
+      '#default_value' => '',
+    ));
+
+  // We need to insert before the submit...
+  $i = 0;
+  foreach ($form as $key => $details) {
+    if (is_array($details)
+      && array_key_exists('#type', $details)
+      && $details['#type'] == 'submit') {
+      break;
+    }
+    $i++;
+  }
+  $form = array_merge(
+    array_slice($form, 0, $i),
+    $captcha_form,
+    array_slice($form, $i));
+
+  $form['#validate'][] = 'maths_captcha_form_validate';
 }
 
 /**
- * Determine whether this form should be protected
+ * Validation for protected forms.
+ */
+function maths_captcha_form_validate($form, &$form_state) {
+  /*
+   * Important that we compare the value passed (input), not the value from
+   * the form, which is new each time.  this means that if somehow the
+   * maths_q field got corrupted, it would fail but the human would get a new
+   * maths test, and then next time their answer is compared against what was
+   * sent.
+   */
+  $hash = $form_state['input']['maths_q'];
+  $parsed = maths_captcha_hash_parse($hash, $form_state['values']['maths_a']);
+  if (!$parsed['correct']) {
+    form_set_error('maths_a', $parsed['error']);
+  }
+}
+
+/**
+ * Determine whether this form should be protected.
  */
 function maths_captcha_should_protect($form_id) {
-    $protect = preg_split('/[\r\n]+/', variable_get('maths_captcha_protect', ''));
-    foreach ($protect as $pattern) {
-        if ($pattern && fnmatch($pattern, $form_id)) {
-            return TRUE;
-        }
+  $protect = preg_split('/[\r\n]+/', variable_get('maths_captcha_protect', ''));
+  foreach ($protect as $pattern) {
+    if ($pattern && fnmatch($pattern, $form_id)) {
+      return TRUE;
     }
-    return FALSE;
+  }
+  return FALSE;
 }
