@@ -150,9 +150,11 @@ function maths_captcha_hash_parse($hash, $answer = NULL) {
   if ($result['valid']) {
     if ($answer !== NULL) {
       $result['correct'] = ($result['rand1'] + $result['rand2']) == $answer;
-    }
-    if (!$result['correct']) {
-      $result['error'] = t('Wrong answer to maths test.');
+      if (!$result['correct']) {
+        // Force a new test to be created, so can't answer by looping.
+        $result['valid'] = FALSE;
+        $result['error'] = t('Wrong answer to maths test.');
+      }
     }
   }
   return $result;
@@ -181,12 +183,14 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
 
   if (!empty($form_state['input']['maths_q'])) {
     $hash = $form_state['input']['maths_q'];
-    $parsed = maths_captcha_hash_parse($hash);
+    $parsed = maths_captcha_hash_parse($hash, $form_state['input']['maths_a']);
     if (!$parsed['valid']) {
+        error_log("mcdebug invalid hash " . json_encode($parsed));
       $hash = FALSE;
     }
   }
   if (empty($hash)) {
+    error_log("mcdebug getting new hash");
     $hash = maths_captcha_hash_new();
     $parsed = maths_captcha_hash_parse($hash);
   }
