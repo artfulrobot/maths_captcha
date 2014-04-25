@@ -185,12 +185,10 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
     $hash = $form_state['input']['maths_q'];
     $parsed = maths_captcha_hash_parse($hash, $form_state['input']['maths_a']);
     if (!$parsed['valid']) {
-        error_log("mcdebug invalid hash " . json_encode($parsed));
       $hash = FALSE;
     }
   }
   if (empty($hash)) {
-    error_log("mcdebug getting new hash");
     $hash = maths_captcha_hash_new();
     $parsed = maths_captcha_hash_parse($hash);
   }
