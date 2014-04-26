@@ -93,7 +93,7 @@ function maths_captcha_hash_new($rand1 = NULL, $rand2 = NULL) {
  * - string representation of valid to timestamp
  */
 function maths_captcha_hash_create($rand1, $rand2, $valid_to) {
-  $hash = md5("This hash will work for $rand1 and $rand2 until $valid_to") . ":$valid_to";
+  $hash = md5("This hash will work for $rand1 and $rand2 until $valid_to for $_SERVER[REMOTE_ADDR]") . ":$valid_to";
 
   // Encrypt question - will generate 4 bytes.
   $enc = base64_encode("$rand1$rand2" ^ substr($hash, 0, 2));
@@ -123,6 +123,8 @@ function maths_captcha_hash_parse($hash, $answer = NULL) {
     'valid' => NULL,
     'correct' => NULL,
     'error' => FALSE,
+    'hash' => $hash,
+    'answer' => $answer,
   );
 
   if (!preg_match('/^(....)(.{32}):(\d+)$/', $hash, $matches)) {
@@ -149,11 +151,19 @@ function maths_captcha_hash_parse($hash, $answer = NULL) {
   // Final answer check.
   if ($result['valid']) {
     if ($answer !== NULL) {
-      $result['correct'] = ($result['rand1'] + $result['rand2']) == $answer;
-      if (!$result['correct']) {
-        // Force a new test to be created, so can't answer by looping.
+      if (!preg_match('/^\d+$/',$answer)) {
+        // Many spambots submit random text. A human should always submit simple number.
+        $result['correct'] = FALSE;
         $result['valid'] = FALSE;
         $result['error'] = t('Wrong answer to maths test.');
+        // Todo: implement time-based IP lock-out.
+      } else {
+        $result['correct'] = ($result['rand1'] + $result['rand2']) == $answer;
+        if (!$result['correct']) {
+          // Force a new test to be created, so can't answer by looping.
+          $result['valid'] = FALSE;
+          $result['error'] = t('Wrong answer to maths test.');
+        }
       }
     }
   }
@@ -186,6 +196,13 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
     $parsed = maths_captcha_hash_parse($hash, $form_state['input']['maths_a']);
     if (!$parsed['valid']) {
       $hash = FALSE;
+    }
+    // Allow the next line to debug
+    if (FALSE) {
+      watchdog('maths_captcha', "@ip Received @v",
+        array('@ip'=>$_SERVER['REMOTE_ADDR'],'@v'=>json_encode($parsed,1)),
+        ($parsed['valid']?WATCHDOG_NOTICE:WATCHDOG_WARNING)
+        );
     }
   }
   if (empty($hash)) {
