@@ -184,10 +184,22 @@ function maths_captcha_hash_renew($hash) {
  * Protect a form.
  *
  * Implements hook_form_alter().
+ *
+ * Adds the maths_q and maths_a elements to protected forms.
+ * This can also be programatically disabled by setting
+ *       $form['#maths_captcha_disable'] = TRUE;
+ *
+ * The element is added to the first of these preferred places:
+ *
+ * 1. inside the (root) maths_captcha_container element
+ * 2. immediately before the first submit element
+ * 3. at the end
+ *
  */
 function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
   // Check if this is one we should care about.
-  if (!maths_captcha_should_protect($form_id)) {
+  if (!maths_captcha_should_protect($form_id)
+    || !empty($form['#maths_captcha_disable'])) {
     return;
   }
 
@@ -227,20 +239,26 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
       '#default_value' => '',
     ));
 
-  // We need to insert before the submit...
-  $i = 0;
-  foreach ($form as $key => $details) {
-    if (is_array($details)
-      && array_key_exists('#type', $details)
-      && $details['#type'] == 'submit') {
-      break;
+  // Look for maths_captcha_container as 1st preference.
+  if (array_key_exists('maths_captcha_container', $form)) {
+    $form['maths_captcha_container'] += $captcha_form;
+
+  } else {
+    // We need to insert before the submit...
+    $i = 0;
+    foreach ($form as $key => $details) {
+      if (is_array($details)
+        && array_key_exists('#type', $details)
+        && $details['#type'] == 'submit') {
+        break;
+      }
+      $i++;
     }
-    $i++;
+    $form = array_merge(
+      array_slice($form, 0, $i),
+      $captcha_form,
+      array_slice($form, $i));
   }
-  $form = array_merge(
-    array_slice($form, 0, $i),
-    $captcha_form,
-    array_slice($form, $i));
 
   $form['#validate'][] = 'maths_captcha_form_validate';
 }
