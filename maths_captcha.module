@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * Maths Captcha module
+ * Maths Captcha module.
  *
  * Protects specified forms from spam entry by requiring user to submit answer
  * to simple maths question
@@ -48,7 +48,7 @@ function maths_captcha_config() {
   $form = array(
     'maths_captcha_protect' => array(
       '#title' => 'Form Ids to protect (you can use * for wildcard)',
-      '#description' => 'Enter form ids one per line',
+      '#description' => t('Enter form ids one per line'),
       '#type' => 'textarea',
       '#default_value' => variable_get('maths_captcha_protect', ''),
     ));
@@ -105,7 +105,7 @@ function maths_captcha_hash_create($rand1, $rand2, $valid_to) {
 /**
  * Parse, validate and check hash and (optionally) answer.
  *
- * returns array of unpacked values:
+ * Returns array of unpacked values:
  *
  * - rand1, rand2
  * - validTo: timestamp
@@ -151,13 +151,15 @@ function maths_captcha_hash_parse($hash, $answer = NULL) {
   // Final answer check.
   if ($result['valid']) {
     if ($answer !== NULL) {
-      if (!preg_match('/^\d+$/',$answer)) {
-        // Many spambots submit random text. A human should always submit simple number.
+      if (!preg_match('/^\d+$/', $answer)) {
+        // Many spambots submit random text.
+        // A human should always submit simple number.
         $result['correct'] = FALSE;
         $result['valid'] = FALSE;
         $result['error'] = t('Wrong answer to maths test.');
         // Todo: implement time-based IP lock-out.
-      } else {
+      }
+      else {
         $result['correct'] = ($result['rand1'] + $result['rand2']) == $answer;
         if (!$result['correct']) {
           // Force a new test to be created, so can't answer by looping.
@@ -173,7 +175,7 @@ function maths_captcha_hash_parse($hash, $answer = NULL) {
 /**
  * Renew an existing hash.
  *
- * (This is not currently in use)
+ * This is not currently in use.
  */
 function maths_captcha_hash_renew($hash) {
   $parsed = maths_captcha_hash_parse($hash);
@@ -194,7 +196,6 @@ function maths_captcha_hash_renew($hash) {
  * 1. inside the (root) maths_captcha_container element
  * 2. immediately before the first submit element
  * 3. at the end
- *
  */
 function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
   // Check if this is one we should care about.
@@ -209,11 +210,11 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
     if (!$parsed['valid']) {
       $hash = FALSE;
     }
-    // Allow the next line to debug
+    // Allow the next line to debug.
     if (FALSE) {
       watchdog('maths_captcha', "@ip Received @v",
-        array('@ip'=>$_SERVER['REMOTE_ADDR'],'@v'=>json_encode($parsed,1)),
-        ($parsed['valid']?WATCHDOG_NOTICE:WATCHDOG_WARNING)
+        array('@ip' => ip_address(), '@v' => json_encode($parsed,1)),
+        ($parsed['valid'] ? WATCHDOG_NOTICE : WATCHDOG_WARNING)
         );
     }
   }
@@ -243,10 +244,11 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
   if (array_key_exists('maths_captcha_container', $form)) {
     $form['maths_captcha_container'] += $captcha_form;
 
-  } else {
+  }
+  else {
     // We need to insert before the submit...
     $i = 0;
-    foreach ($form as $key => $details) {
+    foreach ($form as $details) {
       if (is_array($details)
         && array_key_exists('#type', $details)
         && $details['#type'] == 'submit') {
