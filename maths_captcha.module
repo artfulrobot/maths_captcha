@@ -213,7 +213,7 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
     // Allow the next line to debug.
     if (FALSE) {
       watchdog('maths_captcha', "@ip Received @v",
-        array('@ip' => ip_address(), '@v' => json_encode($parsed,1)),
+        array('@ip' => ip_address(), '@v' => json_encode($parsed, 1)),
         ($parsed['valid'] ? WATCHDOG_NOTICE : WATCHDOG_WARNING)
         );
     }

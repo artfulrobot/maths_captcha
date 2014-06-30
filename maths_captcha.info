@@ -2,6 +2,7 @@ name = Maths Captcha
 package = "Artful Robot"
 description = "Protects human-input forms by adding a maths quiz"
 core = 7.x
-files[] = maths_captcha.module
+# files[] = maths_captcha.module
 configure = admin/config/content/maths_captcha
+
 
