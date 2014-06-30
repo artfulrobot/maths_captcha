@@ -36,7 +36,7 @@ function maths_captcha_menu() {
     'title' => 'Maths Capcha configuration',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('maths_captcha_config'),
-    'access arguments' => array('configure maths captcha'),
+    'access arguments' => array('administer maths captcha'),
   );
   return $items;
 }
@@ -63,6 +63,10 @@ function maths_captcha_permission() {
     'administer maths captcha' => array(
       'title' => t('Administer Maths Captcha'),
       'description' => t('Specify which forms to protect'),
+    ),
+    'skip maths captcha' => array(
+      'title' => t('Skip Maths Captcha'),
+      'description' => t('Users with this role will never be required to complete the captcha.'),
     ),
   );
 }
@@ -200,10 +204,13 @@ function maths_captcha_hash_renew($hash) {
 function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
   // Check if this is one we should care about.
   if (!maths_captcha_should_protect($form_id)
-    || !empty($form['#maths_captcha_disable'])) {
+    || !empty($form['#maths_captcha_disable'])
+    || user_access('skip maths captcha') ) {
     return;
   }
 
+  // We have to use 'input' here because 'values' does not
+  // exist yet.
   if (!empty($form_state['input']['maths_q'])) {
     $hash = $form_state['input']['maths_q'];
     $parsed = maths_captcha_hash_parse($hash, $form_state['input']['maths_a']);
