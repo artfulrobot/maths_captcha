@@ -239,11 +239,11 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
     'maths_a' => array(
       '#type' => 'textfield',
       '#size' => 3,
-      '#title' => t('Human test (to stop spam): what is @rand1 plus @rand2 ?',
-            array(
-              '@rand1' => $parsed['rand1'],
-              '@rand2' => $parsed['rand2'],
-            )),
+      '#title' => t('Human test (to stop spam): what is ')
+      . maths_captcha_obfuscate($parsed['rand1'])
+      . t(' plus ')
+      . maths_captcha_obfuscate($parsed['rand2'])
+      . t(' (answer in numbers not words)'),
       '#default_value' => '',
     ));
 
@@ -301,4 +301,57 @@ function maths_captcha_should_protect($form_id) {
     }
   }
   return FALSE;
+}
+/**
+ * Obfuscation function for the numbers in the question.
+ */
+function maths_captcha_obfuscate($number) {
+  $map = &drupal_static(__FUNCTION__);
+  if (!isset($map)) {
+    $map = array(
+      0 => t('zero'),
+      1 => t('one'),
+      2 => t('two'),
+      3 => t('three'),
+      4 => t('four'),
+      5 => t('five'),
+      6 => t('six'),
+      7 => t('seven'),
+      8 => t('eight'),
+      9 => t('nine'),
+    );
+  }
+
+  // Convert to words 80% of the time.
+  if (rand(0,10)<80) {
+    $number = $map[$number];
+  }
+
+  $length = mb_strlen($number);
+  $output = '';
+  for ($i=0;$i<$length;$i++) {
+    $char = mb_substr($number, $i, 1);
+    if (strlen($char) == 1 && rand(0,100)<50) {
+      // 50% of the time, for single byte characters,
+      // conver to a numerical entity.
+      $char = "&#" . ord($char) . ";";
+    }
+    $mix = rand(1,3);
+    switch ($mix) {
+    case 1:
+      // A third of the time add an empty span containing another random number
+      $char .= "<span title=" . rand(0,9) . "></span>";
+      break;
+    case 2:
+      // or add a misleading comment
+      $char .= "<!-- " . rand(0,9) . "-->";
+      break;
+    case 3:
+      // or wrap it in a span
+      $char = "<span data-number='" . rand(0,9) . "'>$char</span>";
+    }
+    $output .= $char;
+  }
+
+  return $output;
 }
