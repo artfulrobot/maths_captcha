@@ -10,6 +10,23 @@ submit element cannot be found at the time hook_form_alter() is called.
 It is a stateless mechanism, so no session variables/cookies are required.
 There is a 15 minute timeout from generation to validation.
 
+Hashes are only valid for the IP address to which they were issued. This
+stops a lot of botnets which distribute a copy of the form around.
+
+There's a skip maths captcha permission, e.g. for authenticated users.
+
+The system detects the level of attack and deals differently. Anything where
+the hash has been submitted by an IP it was not issued to, or the hash has
+been tampered with in some way, or is invalid is classed as a tamper and
+highly suspect. These get a blank response with a 404 (fake, but in the hope
+that spambots might remove the page from their lists) which saves a few
+server resources as it does not need to render the rest of the page. Other
+levels are reported as errors to the user.
+
+You have the option of error_log-ing all attempts. This can be used with the
+configs in the fail2ban folder to ban naughties at firewall level, saving
+more server resources (as a Drupal bootstrap is not insignificant!).
+
 ## How to use
 
 Once installed, go to the configure screen linked to from the modules page,

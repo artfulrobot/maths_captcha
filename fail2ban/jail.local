@@ -1,0 +1,12 @@
+# Artful Robot: custom jail config snippet for fail2ban
+
+# Ban IPs for 24 hours (bantime) if they submit three invalid hashes within a 24 hour period (findtime)
+[apache-maths-captcha]
+
+enabled   = true
+port      = http,https
+filter    = apache-maths-captcha
+logpath   = /var/log/apache2/*error.log
+maxretry  = 3
+findtime  = 86400
+bantime   = 86400

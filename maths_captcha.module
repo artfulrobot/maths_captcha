@@ -51,7 +51,14 @@ function maths_captcha_config() {
       '#description' => t('Enter form ids one per line'),
       '#type' => 'textarea',
       '#default_value' => variable_get('maths_captcha_protect', ''),
-    ));
+    ),
+    'maths_captcha_error_log' => array(
+      '#title' => 'Log to error_log?',
+      '#description' => t('This is useful if you want to use this in conjunction with external server tools like fail2ban.'),
+      '#type' => 'checkbox',
+      '#default_value' => variable_get('maths_captcha_error_log', FALSE),
+    ),
+  );
   return system_settings_form($form);
 }
 
@@ -132,12 +139,15 @@ function maths_captcha_hash_parse($hash, $answer = NULL) {
   );
 
   if (!preg_match('/^(....)(.{32}):(\d+)$/', $hash, $matches)) {
-    $result['error'] = t('Invalid data. (code @code)', array('@code' => 1));
+    // format of hash is wrong
+    $result['error'] = 'Tampered1';
+    $result['hash'] = '{invalid hash removed}';
     return $result;
   }
   $matches[1] = base64_decode($matches[1]) ^ substr($matches[2], 0, 2);
   if (!preg_match('/^[0-9][0-9]$/', $matches[1])) {
-    $result['error'] = t('Invalid data. (code @code)', array('@code' => 2));
+    // decrypted question numbers are not numbers!
+    $result['error'] = 'Tampered2';
     return $result;
   }
   $result['rand1'] = $matches[1][0];
@@ -145,31 +155,33 @@ function maths_captcha_hash_parse($hash, $answer = NULL) {
   $result['validTo'] = $matches[3];
   $hash_expected = maths_captcha_hash_create($result['rand1'], $result['rand2'], $result['validTo']);
   $result['valid'] = $hash == $hash_expected;
-  if ($result['valid']) {
-    // Further date check.
-    if ($result['validTo'] < time()) {
-      $result['valid'] = FALSE;
-      $result['error'] = t('The human-checking maths test timed out, please check and re-submit.');
-    }
+  if (! $result['valid']) {
+    // This means that the hash is wrong. Typically this means that it was issued to a different IP address.
+    $result['error'] = 'Tampered3';
+    return $result;
+  }
+  // Further date check.
+  if ($result['validTo'] < time()) {
+    $result['valid'] = FALSE;
+    $result['error'] = t('The human-checking maths test timed out, please check and re-submit.');
+    return $result;
   }
   // Final answer check.
-  if ($result['valid']) {
-    if ($answer !== NULL) {
-      if (!preg_match('/^\d+$/', $answer)) {
-        // Many spambots submit random text.
-        // A human should always submit simple number.
-        $result['correct'] = FALSE;
+  if ($answer !== NULL) {
+    if (!preg_match('/^\d\d?$/', $answer)) {
+      // Many spambots submit random text.
+      // A human should always submit simple number.
+      $result['correct'] = FALSE;
+      $result['valid'] = FALSE;
+      $result['error'] = t('Invalid answer to maths test.');
+      // Todo: implement time-based IP lock-out.
+    }
+    else {
+      $result['correct'] = ($result['rand1'] + $result['rand2']) == $answer;
+      if (!$result['correct']) {
+        // Force a new test to be created, so can't answer by looping.
         $result['valid'] = FALSE;
         $result['error'] = t('Wrong answer to maths test.');
-        // Todo: implement time-based IP lock-out.
-      }
-      else {
-        $result['correct'] = ($result['rand1'] + $result['rand2']) == $answer;
-        if (!$result['correct']) {
-          // Force a new test to be created, so can't answer by looping.
-          $result['valid'] = FALSE;
-          $result['error'] = t('Wrong answer to maths test.');
-        }
       }
     }
   }
@@ -218,11 +230,21 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
       $hash = FALSE;
     }
     // Allow the next line to debug.
-    if (FALSE) {
-      watchdog('maths_captcha', "@ip Received @v",
-        array('@ip' => ip_address(), '@v' => json_encode($parsed, 1)),
-        ($parsed['valid'] ? WATCHDOG_NOTICE : WATCHDOG_WARNING)
-        );
+    if (variable_get('maths_captcha_error_log',FALSE)) {
+      $answer = substr($parsed['answer'], 0, 20);
+      // remove anything non-ascii safe for log file (stop at 7d means we exclude our field sep | at the cost of excluding ~ too).
+      if (!preg_match('/^[\x20-\x7d]*$/',$answer)) {
+        $answer = '(non-ASCII text removed)';
+      }
+      $log_line = 'maths_captcha|'
+        . ($parsed['valid'] ? 'Valid' . ($parsed['correct'] ? ':pass' : ':fail' ): 'INVALID' )
+        . "|$parsed[error]|$parsed[hash]|$parsed[rand1] + $parsed[rand2] = $answer|";
+      error_log($log_line);
+      if (substr($parsed['error'],0,8) == 'Tampered') {
+        // Issue a fake 404 - hopefully this will make spammers remove the page from their hitlist?
+        header('HTTP/1.0 404 Gone');
+        exit();
+      }
     }
   }
   if (empty($hash)) {
