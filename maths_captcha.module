@@ -138,6 +138,11 @@ function maths_captcha_hash_parse($hash, $answer = NULL) {
     'answer' => $answer,
   );
 
+  if ($hash === 'nevergonnawork') {
+    $result['error'] = 'Invalid form, or form submitted too quickly.';
+    $result['valid'] = FALSE;
+    return $result;
+  }
   if (!preg_match('/^(....)(.{32}):(\d+)$/', $hash, $matches)) {
     // format of hash is wrong
     $result['error'] = 'Tampered1';
@@ -229,7 +234,7 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
     if (!$parsed['valid']) {
       $hash = FALSE;
     }
-    // Allow the next line to debug.
+
     if (variable_get('maths_captcha_error_log',FALSE)) {
       $answer = substr($parsed['answer'], 0, 20);
       // remove anything non-ascii safe for log file (stop at 7d means we exclude our field sep | at the cost of excluding ~ too).
@@ -252,14 +257,24 @@ function maths_captcha_form_alter(&$form, &$form_state, $form_id) {
     $parsed = maths_captcha_hash_parse($hash);
   }
 
+  $data_key = 'k' . substr(md5(time() . "foo lkjlk"),0,10);
   // Create form elements.
   $captcha_form = array(
     'maths_q' => array(
       '#type' => 'hidden',
-      '#value' => $hash,
+      '#value' => 'nevergonnawork',
+      '#default_value' => 'nevergonnawork',
+      '#attributes' => array('data-mathsid' => $data_key),
     ),
     'maths_a' => array(
+      '#attached' => array(
+        'js' => array( drupal_get_path('module','maths_captcha') . '/maths-captcha.js'),
+      ),
       '#type' => 'textfield',
+      '#suffix' => '<noscript>Sorry, this form will not work without Javascript. If this is an issue for you please contact us by email.</noscript><script>
+      window.mathsCaptcha = window.mathsCaptcha || {};
+      window.mathsCaptcha.' . $data_key . ' = "' . $hash . '";
+      </script>',
       '#size' => 3,
       '#title' => t('Human test (to stop spam): what is ')
       . maths_captcha_obfuscate($parsed['rand1'])
